@@ -1,0 +1,969 @@
+import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui';
+import { Button } from '../../components/ui';
+import { Table, Pagination } from '../../components/ui/Table';
+import { Badge, StatusBadge, RoleBadge } from '../../components/ui/Badge';
+import { Input, Select, SearchInput } from '../../components/ui/Input';
+import { Modal, ConfirmModal } from '../../components/ui/Modal';
+import { LoadingSpinner, EmptyState } from '../../components/ui/Loader';
+import DashboardLayout from '../../components/DashboardLayout';
+import { 
+  Users, 
+  Building2, 
+  Calendar, 
+  Settings, 
+  BarChart3, 
+  Shield, 
+  Database,
+  Globe,
+  TrendingUp,
+  UserPlus,
+  LogOut,
+  Menu,
+  X,
+  Home,
+  FileText,
+  Download,
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
+  Filter,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Activity,
+  DollarSign,
+  UserCheck,
+  UserX
+} from 'lucide-react';
+import { useAuthStore } from '../../store/authStore';
+import { RoleProtectedRoute } from '../../components/RoleProtectedRoute';
+import { UserRole } from '../../types/rbac';
+import { 
+  useSuperAdminStats,
+  useSuperAdminTenants,
+  useSuperAdminUsers,
+  useSuperAdminEvents,
+  useSuperAdminReports,
+  useCreateTenant,
+  useCreateUser,
+  useUpdateTenant,
+  useUpdateUser,
+  useDeleteTenant,
+  useDeleteUser
+} from '../../hooks/useSuperAdmin';
+
+// Types
+interface DashboardStats {
+  totalTenants: number;
+  totalUsers: number;
+  totalEvents: number;
+  totalRegistrations: number;
+}
+
+interface Tenant {
+  id: string;
+  name: string;
+  logo?: string;
+  primaryColor: string;
+  contactInfo: {
+    email: string;
+    phone: string;
+  };
+  isActive: boolean;
+  createdAt: string;
+  userCount: number;
+}
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'super_admin' | 'event_creator' | 'staff' | 'attendee';
+  tenantId?: string;
+  tenantName?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+interface Event {
+  id: string;
+  name: string;
+  tenantName: string;
+  date: string;
+  status: 'draft' | 'published' | 'closed';
+  registrations: number;
+  maxAttendees: number;
+}
+
+interface ChartData {
+  date: string;
+  events: number;
+  registrations: number;
+}
+
+type ActiveView = 'overview' | 'tenants' | 'users' | 'events' | 'reports' | 'settings';
+
+export const SuperAdminDashboard: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, logout } = useAuthStore();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // React Query hooks for data fetching
+  const { data: stats, isLoading: statsLoading, error: statsError } = useSuperAdminStats();
+  const { data: tenants, isLoading: tenantsLoading, error: tenantsError } = useSuperAdminTenants();
+  const { data: users, isLoading: usersLoading, error: usersError } = useSuperAdminUsers();
+  const { data: events, isLoading: eventsLoading, error: eventsError } = useSuperAdminEvents();
+  const { data: reports, isLoading: reportsLoading, error: reportsError } = useSuperAdminReports();
+  
+  // Mutation hooks
+  const createTenantMutation = useCreateTenant();
+  const createUserMutation = useCreateUser();
+  const updateTenantMutation = useUpdateTenant();
+  const updateUserMutation = useUpdateUser();
+  const deleteTenantMutation = useDeleteTenant();
+  const deleteUserMutation = useDeleteUser();
+  
+  // Pagination states
+  const [tenantPage, setTenantPage] = useState(1);
+  const [userPage, setUserPage] = useState(1);
+  const [eventPage, setEventPage] = useState(1);
+  const itemsPerPage = 10;
+  
+  // Filter states
+  const [userRoleFilter, setUserRoleFilter] = useState<string>('all');
+  const [eventStatusFilter, setEventStatusFilter] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Modal states
+  const [showTenantModal, setShowTenantModal] = useState(false);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  
+  // Form states
+  const [tenantForm, setTenantForm] = useState({
+    name: '',
+    logo: '',
+    primaryColor: '#3B82F6',
+    contactInfo: { email: '', phone: '' }
+  });
+  
+  const [userForm, setUserForm] = useState({
+    username: '',
+    email: '',
+    firstName: '',
+    lastName: '',
+    role: 'attendee'
+  });
+
+  const [activeView, setActiveView] = useState<ActiveView>('overview');
+
+  // Loading state
+  const isLoading = statsLoading || tenantsLoading || usersLoading || eventsLoading || reportsLoading;
+
+  // Error handling
+  const hasError = statsError || tenantsError || usersError || eventsError || reportsError;
+
+  // Helper functions
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const handleCreateTenant = async () => {
+    try {
+      await createTenantMutation.mutateAsync(tenantForm);
+      setShowTenantModal(false);
+      setTenantForm({
+        name: '',
+        logo: '',
+        primaryColor: '#3B82F6',
+        contactInfo: { email: '', phone: '' }
+      });
+    } catch (error) {
+      console.error('Failed to create tenant:', error);
+    }
+  };
+
+  const handleCreateUser = async () => {
+    try {
+      await createUserMutation.mutateAsync(userForm);
+      setShowUserModal(false);
+      setUserForm({
+        username: '',
+        email: '',
+        firstName: '',
+        lastName: '',
+        role: 'attendee'
+      });
+    } catch (error) {
+      console.error('Failed to create user:', error);
+    }
+  };
+
+  const handleDeleteItem = async () => {
+    if (!selectedItem) return;
+    
+    try {
+      if (activeView === 'tenants') {
+        await deleteTenantMutation.mutateAsync(selectedItem.id);
+      } else if (activeView === 'users') {
+        await deleteUserMutation.mutateAsync(selectedItem.id);
+      }
+      setShowConfirmModal(false);
+      setSelectedItem(null);
+    } catch (error) {
+      console.error('Failed to delete item:', error);
+    }
+  };
+
+  // Render loading state
+  if (isLoading) {
+    return (
+      <RoleProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN]}>
+        <DashboardLayout>
+          <div className="flex items-center justify-center h-64">
+            <LoadingSpinner size="lg" />
+          </div>
+        </DashboardLayout>
+      </RoleProtectedRoute>
+    );
+  }
+
+  // Render error state
+  if (hasError) {
+    return (
+      <RoleProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN]}>
+        <DashboardLayout>
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <p className="text-red-600">Failed to load dashboard data. Please try again.</p>
+              <Button onClick={() => window.location.reload()} className="mt-4">
+                Reload
+              </Button>
+            </div>
+          </div>
+        </DashboardLayout>
+      </RoleProtectedRoute>
+    );
+  }
+
+  return (
+    <RoleProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN]}>
+      <DashboardLayout>
+        <div className="space-y-6">
+          {/* Stats Overview */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Total Tenants</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats?.totalTenants || 0}</p>
+                  </div>
+                  <Building2 className="w-8 h-8 text-blue-600" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Total Users</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats?.totalUsers || 0}</p>
+                  </div>
+                  <Users className="w-8 h-8 text-green-600" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Total Events</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats?.totalEvents || 0}</p>
+                  </div>
+                  <Calendar className="w-8 h-8 text-purple-600" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Total Registrations</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats?.totalRegistrations || 0}</p>
+                  </div>
+                  <TrendingUp className="w-8 h-8 text-orange-600" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Main Content */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Recent Tenants */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Tenants</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {tenants && tenants.length > 0 ? (
+                  <div className="space-y-4">
+                    {tenants.slice(0, 5).map((tenant: any) => (
+                      <div key={tenant.id} className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 rounded-full" style={{ backgroundColor: tenant.primaryColor }}></div>
+                          <div>
+                            <p className="font-medium">{tenant.name}</p>
+                            <p className="text-sm text-gray-600">{tenant.contactInfo?.email}</p>
+                          </div>
+                        </div>
+                        <StatusBadge status={tenant.isActive ? 'active' : 'inactive'} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState title="No tenants" description="No tenants have been created yet." />
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Recent Users */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Users</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {users && users.length > 0 ? (
+                  <div className="space-y-4">
+                    {users.slice(0, 5).map((user: any) => (
+                      <div key={user.id} className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{user.name}</p>
+                          <p className="text-sm text-gray-600">{user.email}</p>
+                        </div>
+                        <RoleBadge role={user.role} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState title="No users" description="No users have been created yet." />
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Recent Events */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Events</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {events && events.length > 0 ? (
+                  <div className="space-y-4">
+                    {events.slice(0, 5).map((event: any) => (
+                      <div key={event.id} className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{event.name}</p>
+                          <p className="text-sm text-gray-600">{event.tenantName}</p>
+                        </div>
+                        <StatusBadge status={event.status} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState title="No events" description="No events have been created yet." />
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </DashboardLayout>
+    </RoleProtectedRoute>
+  );
+};
+
+export default SuperAdminDashboard;
+              <div className="flex-1">
+                <p className="text-sm font-medium">Event published</p>
+                <p className="text-xs text-gray-500">Tech Summit 2024 - 4 hours ago</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
+              <div className="p-2 bg-purple-100 rounded-full">
+                <Users className="w-4 h-4 text-purple-600" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium">User registration spike</p>
+                <p className="text-xs text-gray-500">45 new users today - 6 hours ago</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  const renderTenants = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Tenant Management</h2>
+        <Button>
+          <Plus className="w-4 h-4 mr-2" />
+          Create Tenant
+        </Button>
+      </div>
+
+      <Card>
+        <CardContent className="p-6">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Tenant Name</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Users</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Created Date</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedTenants.map((tenant) => (
+                  <tr key={tenant.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-4 px-4">
+                      <div className="flex items-center space-x-3">
+                        <div 
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold"
+                          style={{ backgroundColor: tenant.primaryColor }}
+                        >
+                          {tenant.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{tenant.name}</p>
+                          <p className="text-sm text-gray-500">{tenant.contactInfo.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(tenant.isActive ? 'active' : 'inactive')}`}>
+                        {tenant.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-center space-x-1">
+                        <Users className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-900">{tenant.userCount}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="text-sm text-gray-900">{formatDate(tenant.createdAt)}</span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-center space-x-2">
+                        <Button variant="outline" size="sm">
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button variant="outline" size="sm">
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className={tenant.isActive ? 'text-red-600 hover:text-red-700' : 'text-green-600 hover:text-green-700'}
+                        >
+                          {tenant.isActive ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Pagination */}
+          <div className="flex items-center justify-between mt-6">
+            <p className="text-sm text-gray-600">
+              Showing {((tenantPage - 1) * itemsPerPage) + 1} to {Math.min(tenantPage * itemsPerPage, tenants.length)} of {tenants.length} tenants
+            </p>
+            <div className="flex items-center space-x-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setTenantPage(Math.max(1, tenantPage - 1))}
+                disabled={tenantPage === 1}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <span className="text-sm text-gray-600">Page {tenantPage}</span>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setTenantPage(Math.min(Math.ceil(tenants.length / itemsPerPage), tenantPage + 1))}
+                disabled={tenantPage >= Math.ceil(tenants.length / itemsPerPage)}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  const renderUsers = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2">
+            <Filter className="w-4 h-4 text-gray-500" />
+            <select 
+              value={userRoleFilter}
+              onChange={(e) => setUserRoleFilter(e.target.value)}
+              className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+            >
+              <option value="all">All Roles</option>
+              <option value="super_admin">Super Admin</option>
+              <option value="event_creator">Event Creator</option>
+              <option value="staff">Staff</option>
+              <option value="attendee">Attendee</option>
+            </select>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <input
+              type="text"
+              placeholder="Search users..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 border border-gray-300 rounded-md px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="p-6">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Name</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Email</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Role</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Tenant</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedUsers.map((user) => (
+                  <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-4 px-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                          <span className="text-sm font-medium text-gray-600">{user.name.charAt(0)}</span>
+                        </div>
+                        <span className="font-medium text-gray-900">{user.name}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="text-sm text-gray-900">{user.email}</span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
+                        {user.role.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="text-sm text-gray-900">{user.tenantName || 'N/A'}</span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(user.isActive ? 'active' : 'inactive')}`}>
+                        {user.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-center space-x-2">
+                        <Button variant="outline" size="sm">
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className={user.isActive ? 'text-red-600 hover:text-red-700' : 'text-green-600 hover:text-green-700'}
+                        >
+                          {user.isActive ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Pagination */}
+          <div className="flex items-center justify-between mt-6">
+            <p className="text-sm text-gray-600">
+              Showing {((userPage - 1) * itemsPerPage) + 1} to {Math.min(userPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} users
+            </p>
+            <div className="flex items-center space-x-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setUserPage(Math.max(1, userPage - 1))}
+                disabled={userPage === 1}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <span className="text-sm text-gray-600">Page {userPage}</span>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setUserPage(Math.min(Math.ceil(filteredUsers.length / itemsPerPage), userPage + 1))}
+                disabled={userPage >= Math.ceil(filteredUsers.length / itemsPerPage)}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  const renderEvents = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Global Events</h2>
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2">
+            <Filter className="w-4 h-4 text-gray-500" />
+            <select 
+              value={eventStatusFilter}
+              onChange={(e) => setEventStatusFilter(e.target.value)}
+              className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+            >
+              <option value="all">All Status</option>
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+              <option value="closed">Closed</option>
+            </select>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <input
+              type="text"
+              placeholder="Search events..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 border border-gray-300 rounded-md px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="p-6">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Event Name</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Tenant</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Date</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Registrations</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedEvents.map((event) => (
+                  <tr key={event.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-4 px-4">
+                      <span className="font-medium text-gray-900">{event.name}</span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="text-sm text-gray-900">{event.tenantName}</span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="text-sm text-gray-900">{formatDate(event.date)}</span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
+                        {event.status}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-center space-x-1">
+                        <Users className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-900">{event.registrations}/{event.maxAttendees}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-center space-x-2">
+                        <Button variant="outline" size="sm">
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button variant="outline" size="sm">
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Pagination */}
+          <div className="flex items-center justify-between mt-6">
+            <p className="text-sm text-gray-600">
+              Showing {((eventPage - 1) * itemsPerPage) + 1} to {Math.min(eventPage * itemsPerPage, filteredEvents.length)} of {filteredEvents.length} events
+            </p>
+            <div className="flex items-center space-x-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setEventPage(Math.max(1, eventPage - 1))}
+                disabled={eventPage === 1}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <span className="text-sm text-gray-600">Page {eventPage}</span>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setEventPage(Math.min(Math.ceil(filteredEvents.length / itemsPerPage), eventPage + 1))}
+                disabled={eventPage >= Math.ceil(filteredEvents.length / itemsPerPage)}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  const renderReports = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Reports</h2>
+        <Button>
+          <Download className="w-4 h-4 mr-2" />
+          Export All Reports
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Users className="w-5 h-5 mr-2" />
+              Registration Report
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Total Registrations</span>
+                <span className="font-semibold">{stats.totalRegistrations.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">This Month</span>
+                <span className="font-semibold">1,234</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Growth Rate</span>
+                <span className="font-semibold text-green-600">+12.5%</span>
+              </div>
+              <Button variant="outline" size="sm" className="w-full">
+                <Download className="w-4 h-4 mr-2" />
+                Download CSV
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Activity className="w-5 h-5 mr-2" />
+              Attendance Report
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Total Attendees</span>
+                <span className="font-semibold">8,456</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Attendance Rate</span>
+                <span className="font-semibold">87.3%</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">No-show Rate</span>
+                <span className="font-semibold text-red-600">12.7%</span>
+              </div>
+              <Button variant="outline" size="sm" className="w-full">
+                <Download className="w-4 h-4 mr-2" />
+                Download CSV
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <DollarSign className="w-5 h-5 mr-2" />
+              Revenue Report
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Total Revenue</span>
+                <span className="font-semibold">$124,500</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">This Month</span>
+                <span className="font-semibold">$18,750</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Growth Rate</span>
+                <span className="font-semibold text-green-600">+23.4%</span>
+              </div>
+              <Button variant="outline" size="sm" className="w-full">
+                <Download className="w-4 h-4 mr-2" />
+                Download CSV
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+
+  const renderSettings = () => (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold text-gray-900">Platform Settings</h2>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Platform Configuration</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Platform Name</label>
+              <input
+                type="text"
+                defaultValue="EventLite"
+                className="w-full border border-gray-300 rounded-md px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Default Language</label>
+              <select className="w-full border border-gray-300 rounded-md px-3 py-2">
+                <option>English</option>
+                <option>Spanish</option>
+                <option>French</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Timezone</label>
+              <select className="w-full border border-gray-300 rounded-md px-3 py-2">
+                <option>UTC</option>
+                <option>EST</option>
+                <option>PST</option>
+              </select>
+            </div>
+            <Button>Save Configuration</Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Feature Toggles</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-gray-900">Public Event Registration</p>
+                <p className="text-sm text-gray-500">Allow public users to register for events</p>
+              </div>
+              <input type="checkbox" defaultChecked className="w-4 h-4" />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-gray-900">QR Code Generation</p>
+                <p className="text-sm text-gray-500">Generate QR codes for event registrations</p>
+              </div>
+              <input type="checkbox" defaultChecked className="w-4 h-4" />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-gray-900">Email Notifications</p>
+                <p className="text-sm text-gray-500">Send email notifications for events</p>
+              </div>
+              <input type="checkbox" defaultChecked className="w-4 h-4" />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-gray-900">Multi-tenant Support</p>
+                <p className="text-sm text-gray-500">Enable multiple organizations</p>
+              </div>
+              <input type="checkbox" defaultChecked className="w-4 h-4" />
+            </div>
+            <Button>Save Features</Button>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+
+  const renderContent = () => {
+    const path = location.pathname;
+    if (path === '/super-admin' || path === '/super-admin/') return renderOverview();
+    if (path.startsWith('/super-admin/tenants')) return renderTenants();
+    if (path.startsWith('/super-admin/users')) return renderUsers();
+    if (path.startsWith('/super-admin/events')) return renderEvents();
+    if (path.startsWith('/super-admin/reports')) return renderReports();
+    if (path.startsWith('/super-admin/settings')) return renderSettings();
+    return renderOverview();
+  };
+
+  return (
+    <RoleProtectedRoute allowedRoles={[UserRole.SUPER_ADMIN]}>
+      <DashboardLayout>
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <LoadingSpinner size="lg" />
+          </div>
+        ) : (
+          renderContent()
+        )}
+      </DashboardLayout>
+    </RoleProtectedRoute>
+  );
+};
