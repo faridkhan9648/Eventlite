@@ -21,7 +21,7 @@ router.get('/stats', authenticateToken, requireRole(UserRole.EVENT_CREATOR), asy
     const publishedEvents = events.filter(event => event.status === 'published').length;
     const draftEvents = events.filter(event => event.status === 'draft').length;
     const totalAttendees = events.reduce((sum, event) => sum + (event.currentAttendees || 0), 0);
-    const upcomingEvents = events.filter(event => new Date(event.date || new Date()) > new Date()).length;
+    const upcomingEvents = events.filter(event => new Date(event.startDate || new Date()) > new Date()).length;
     
     const stats = {
       totalEvents,
@@ -47,7 +47,7 @@ router.get('/events', authenticateToken, requireRole(UserRole.EVENT_CREATOR), as
     const userId = req.user!.id;
     
     const events = await Event.find({ createdBy: userId })
-      .select('title description date location maxAttendees currentAttendees status createdAt')
+      .select('title description startDate endDate location maxAttendees currentAttendees status createdAt')
       .sort({ createdAt: -1 });
     
     console.log('Creator Events Response:', events.length, 'events');
@@ -82,7 +82,7 @@ router.get('/attendees', authenticateToken, requireRole(UserRole.EVENT_CREATOR),
               attendeeName: user.name || user.username,
               attendeeEmail: user.email,
               eventName: event.title,
-              eventDate: event.date,
+              eventDate: event.startDate,
               eventLocation: event.location,
               registrationDate: registration.registrationDate || event.createdAt,
               checkedIn: registration.checkedIn || false,
@@ -108,11 +108,11 @@ router.post('/events', authenticateToken, requireRole(UserRole.EVENT_CREATOR), a
   try {
     console.log('Create Event Request - User:', req.user!.username);
     
-    const { title, description, location, date, maxAttendees, status } = req.body;
+    const { title, description, location, startDate, endDate, maxAttendees, status } = req.body;
     const userId = req.user!.id;
     
     // Validate required fields
-    if (!title || !description || !location || !date || !maxAttendees) {
+    if (!title || !description || !location || !startDate || !endDate || !maxAttendees) {
       return res.status(400).json({ error: 'All required fields must be provided' });
     }
     
@@ -121,7 +121,8 @@ router.post('/events', authenticateToken, requireRole(UserRole.EVENT_CREATOR), a
       title,
       description,
       location,
-      date: new Date(date),
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
       maxAttendees: parseInt(maxAttendees),
       status: status || 'draft',
       createdBy: userId,

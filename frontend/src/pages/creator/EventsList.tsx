@@ -126,7 +126,7 @@ export const EventsList: React.FC = () => {
                           
                           <div className="flex items-center text-sm text-gray-500">
                             <Clock className="h-4 w-4 mr-1" />
-                            <span>{formatDate(event.date)}</span>
+                            <span>{formatDate(event.startDate)}</span>
                           </div>
                         </div>
                         

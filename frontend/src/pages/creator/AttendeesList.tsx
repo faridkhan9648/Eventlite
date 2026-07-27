@@ -98,14 +98,14 @@ export const AttendeesList: React.FC = () => {
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center space-x-3 mb-2">
-                          <h3 className="text-lg font-semibold text-gray-900">{attendee.name}</h3>
+                          <h3 className="text-lg font-semibold text-gray-900">{attendee.attendeeName}</h3>
                           {getStatusBadge(attendee.status)}
                         </div>
                         
                         <div className="space-y-2 text-sm text-gray-600">
                           <div className="flex items-center">
                             <Mail className="w-4 h-4 mr-2" />
-                            {attendee.email}
+                            {attendee.attendeeEmail}
                           </div>
                           
                           {attendee.phone && (
@@ -117,7 +117,7 @@ export const AttendeesList: React.FC = () => {
                           
                           <div className="flex items-center">
                             <Calendar className="w-4 h-4 mr-2" />
-                            {attendee.eventTitle}
+                            {attendee.eventName}
                           </div>
                           
                           <div className="flex items-center">

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { eventCreatorAPI } from '../services/api';
+import { eventCreatorAPI, publicAPI } from '../services/api';
 
 // Public Events Hooks
 export const usePublicEvents = () => {

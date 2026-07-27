@@ -25,7 +25,7 @@ api.interceptors.response.use((response) => {
     localStorage.removeItem('refreshToken');
     window.location.href = '/login';
   }
-  return response.data;
+  return response;
 });
 
 // Super Admin APIs
@@ -64,12 +64,12 @@ export const superAdminAPI = {
 export const eventCreatorAPI = {
   // Events (only their events)
   getEvents: async () => {
-    const response = await api.get('/events');
+    const response = await api.get('/creator/events');
     return response.data;
   },
   
   createEvent: async (data: any) => {
-    const response = await api.post('/events', data);
+    const response = await api.post('/creator/events', data);
     return response.data;
   },
   
@@ -100,12 +100,12 @@ export const eventCreatorAPI = {
 export const creatorAPI = {
   // Events (only their events)
   getEvents: async () => {
-    const response = await api.get('/events');
+    const response = await api.get('/creator/events');
     return response.data;
   },
   
   createEvent: async (data: any) => {
-    const response = await api.post('/events', data);
+    const response = await api.post('/creator/events', data);
     return response.data;
   },
   
@@ -197,6 +197,26 @@ export const attendeeAPI = {
   // Register for event
   registerForEvent: async (eventId: string, customFields: any) => {
     const response = await api.post(`/registrations/${eventId}`, { customFields });
+    return response.data;
+  }
+};
+
+// Public / Registration APIs
+export const publicAPI = {
+  getEventDetails: async (eventId: string) => {
+    const response = await api.get(`/registration/event-details/${eventId}`);
+    return response.data;
+  },
+  
+  getRegistrationQR: async (registrationId: string) => {
+    const response = await api.get(`/registration/registration/${registrationId}`);
+    return response.data;
+  },
+  
+  downloadQR: async (registrationId: string) => {
+    const response = await api.get(`/registration/qr-code/${registrationId}`, {
+      responseType: 'blob'
+    });
     return response.data;
   }
 };

@@ -15,8 +15,9 @@ export const CreateEvent: React.FC = () => {
     title: '',
     description: '',
     location: '',
-    date: '',
-    maxAttendees: '',
+    startDate: '',
+    endDate: '',
+    maxAttendees: '50',
     status: 'draft'
   });
 
@@ -24,12 +25,23 @@ export const CreateEvent: React.FC = () => {
     e.preventDefault();
     
     try {
+      if (formData.description.length < 10) {
+        alert('Description must be at least 10 characters long.');
+        return;
+      }
+
+      if (new Date(formData.endDate) <= new Date(formData.startDate)) {
+        alert('End date must be after the start date.');
+        return;
+      }
+
       const eventData = {
         title: formData.title,
         description: formData.description,
         location: formData.location,
-        date: formData.date,
-        maxAttendees: parseInt(formData.maxAttendees),
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        maxAttendees: parseInt(formData.maxAttendees) || 50,
         status: formData.status
       };
       
@@ -100,9 +112,19 @@ export const CreateEvent: React.FC = () => {
                 
                 <div>
                   <Input
-                    label="Date & Time"
-                    value={formData.date}
-                    onChange={(e) => handleInputChange('date', e)}
+                    label="Start Date & Time"
+                    value={formData.startDate}
+                    onChange={(e) => handleInputChange('startDate', e)}
+                    type="datetime-local"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <Input
+                    label="End Date & Time"
+                    value={formData.endDate}
+                    onChange={(e) => handleInputChange('endDate', e)}
                     type="datetime-local"
                     required
                   />
