@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { eventCreatorAPI, publicAPI } from '../services/api';
+import { attendeeAPI, publicAPI } from '../services/api';
 
 // Public Events Hooks
 export const usePublicEvents = () => {
   return useQuery({
     queryKey: ['public', 'events'],
-    queryFn: eventCreatorAPI.getEvents,
+    queryFn: attendeeAPI.getEvents,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 };

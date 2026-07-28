@@ -5,7 +5,8 @@ import { Container } from '../components/ui';
 import { Button } from '../components/ui';
 import { LoadingSpinner } from '../components/ui/Loader';
 import { useEventDetails } from '../hooks/usePublic';
-import { useRegisterForEvent } from '../hooks/useAttendee';
+import { publicAPI } from '../services/api';
+import { useAuthStore } from '../store/authStore';
 
 interface CustomFieldValue {
   [key: string]: string | number | boolean;
@@ -14,11 +15,12 @@ interface CustomFieldValue {
 export const PublicEventRegistration: React.FC = () => {
   const { eventId } = useParams<{ eventId: string }>();
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuthStore();
   const [formData, setFormData] = useState<CustomFieldValue>({});
-  const [success, setSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   const { data: event, isLoading, error } = useEventDetails(eventId || '');
-  const registerMutation = useRegisterForEvent();
 
   const handleInputChange = (name: string, value: string | number | boolean) => {
     setFormData(prev => ({
@@ -29,17 +31,29 @@ export const PublicEventRegistration: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+
+    if (!isAuthenticated || !user) {
+      navigate('/login');
+      return;
+    }
+
+    const eventIdToRegister = event?._id || eventId;
+    if (!eventIdToRegister) return;
     
-    if (!event?._id) return;
-    
+    setIsSubmitting(true);
     try {
-      await registerMutation.mutateAsync({
-        eventId: event._id,
-        customFields: formData
-      });
-      setSuccess(true);
-    } catch (error) {
-      console.error('Registration failed:', error);
+      const result = await publicAPI.registerForEvent(eventIdToRegister, formData);
+      if (result.registrationId) {
+        navigate(`/registration-qr/${result.registrationId}`);
+      } else {
+        navigate('/attendee');
+      }
+    } catch (err) {
+      console.error('Registration failed:', err);
+      setErrorMessage(err instanceof Error ? err.message : 'Registration failed');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -60,6 +74,23 @@ export const PublicEventRegistration: React.FC = () => {
     );
   }
 
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4">
+        <Container size="sm">
+          <Card className="w-full shadow-lg">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-gray-600 mb-4">Please log in to register for this event.</p>
+                <Button onClick={() => navigate('/login')}>Log In</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </Container>
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4">
@@ -70,31 +101,6 @@ export const PublicEventRegistration: React.FC = () => {
                 <p className="text-red-600">Failed to load event details</p>
                 <Button onClick={() => window.location.reload()} className="mt-4">
                   Retry
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </Container>
-      </div>
-    );
-  }
-
-  if (success) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4">
-        <Container size="sm">
-          <Card className="w-full shadow-lg">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Registration Successful!</h2>
-                <p className="text-gray-600 mb-6">You have successfully registered for this event.</p>
-                <Button onClick={() => navigate('/attendee')}>
-                  Go to Dashboard
                 </Button>
               </div>
             </CardContent>
@@ -139,7 +145,8 @@ export const PublicEventRegistration: React.FC = () => {
                 <p className="text-gray-600 mb-4">{event.description}</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
                   <div>
-                    <span className="font-medium">Date:</span> {new Date(event.date).toLocaleDateString()}
+                    <span className="font-medium">Date:</span>{' '}
+                    {new Date(event.date || event.startDate).toLocaleDateString()}
                   </div>
                   <div>
                     <span className="font-medium">Location:</span> {event.location}
@@ -227,14 +234,18 @@ export const PublicEventRegistration: React.FC = () => {
                 </div>
               )}
 
+              {errorMessage && (
+                <p className="text-red-600 text-sm">{errorMessage}</p>
+              )}
+
               {/* Submit Button */}
               <div className="flex justify-end">
                 <Button
                   type="submit"
-                  disabled={registerMutation.isPending}
+                  disabled={isSubmitting}
                   className="w-full md:w-auto"
                 >
-                  {registerMutation.isPending ? 'Registering...' : 'Register for Event'}
+                  {isSubmitting ? 'Registering...' : 'Register for Event'}
                 </Button>
               </div>
             </form>

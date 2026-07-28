@@ -1,4 +1,5 @@
 import axios from 'axios';
+import AuthUtils from '../utils/auth';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -194,17 +195,53 @@ export const attendeeAPI = {
     return response.data;
   },
   
-  // Register for event
-  registerForEvent: async (eventId: string, customFields: any) => {
-    const response = await api.post(`/registrations/${eventId}`, { customFields });
+  // Register for event (authenticated attendee)
+  registerForEvent: async (eventId: string, customFields?: Record<string, unknown>) => {
+    const user = AuthUtils.getUserFromToken(AuthUtils.getToken());
+    if (!user?.id) {
+      throw new Error('You must be logged in to register for events');
+    }
+    const response = await api.post('/registration/register', {
+      eventId,
+      userId: user.id,
+      customFields: customFields || {},
+    });
     return response.data;
-  }
+  },
+
+  // Cancel registration
+  cancelRegistration: async (eventId: string) => {
+    const response = await api.delete(`/registrations/${eventId}`);
+    return response.data;
+  },
 };
 
 // Public / Registration APIs
 export const publicAPI = {
+  getPublicEvents: async () => {
+    const response = await api.get('/events/public-events');
+    return response.data;
+  },
+
   getEventDetails: async (eventId: string) => {
     const response = await api.get(`/registration/event-details/${eventId}`);
+    const event = response.data;
+    return {
+      ...event,
+      date: event.date || event.startDate,
+    };
+  },
+
+  registerForEvent: async (eventId: string, customFields?: Record<string, unknown>) => {
+    const user = AuthUtils.getUserFromToken(AuthUtils.getToken());
+    if (!user?.id) {
+      throw new Error('You must be logged in to register for events');
+    }
+    const response = await api.post('/registration/register', {
+      eventId,
+      userId: user.id,
+      customFields: customFields || {},
+    });
     return response.data;
   },
   
