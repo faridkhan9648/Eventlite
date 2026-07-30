@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
-import { User } from '../models/User';
+import { Registration } from '../models/Registration';
 import { Event } from '../models/Event';
+import { User } from '../models/User';
 import { authenticateToken, requireRole } from '../middleware/rbac';
 import { AuthRequest, UserRole } from '../types';
 
@@ -41,14 +42,12 @@ router.put('/profile', authenticateToken, requireRole(UserRole.ATTENDEE), async 
     const { firstName, lastName, phone } = req.body;
     const userId = req.user!.id;
     
-    // Find and update user
     const user = await User.findById(userId);
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Update fields
     if (firstName !== undefined) user.firstName = firstName;
     if (lastName !== undefined) user.lastName = lastName;
     if (phone !== undefined) user.phone = phone;
@@ -78,35 +77,31 @@ router.get('/stats', authenticateToken, requireRole(UserRole.ATTENDEE), async (r
     
     const userId = req.user!.id;
     
-    // Get user's registered events
-    const registeredEvents = await Event.find({
-      'registrations.attendeeId': userId
-    });
-    
-    // Calculate stats
-    const totalEvents = registeredEvents.length;
-    const upcomingEvents = registeredEvents.filter(event => 
-      new Date(event.date) > new Date()
-    ).length;
-    const pastEvents = registeredEvents.filter(event => 
-      new Date(event.date) <= new Date()
-    ).length;
-    
-    // Get next event
-    const nextEvent = registeredEvents
-      .filter(event => new Date(event.date) > new Date())
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
-    
+    const registrations = await Registration.find({
+      userId,
+      status: { $ne: 'cancelled' },
+    }).populate('eventId');
+
+    const now = new Date();
+    const registeredEvents = registrations.length;
+    const attendedEvents = registrations.filter((r) => r.status === 'checked-in').length;
+    const upcomingEvents = registrations.filter((r) => {
+      const event = r.eventId as any;
+      const eventDate = event?.startDate || event?.date;
+      return eventDate && new Date(eventDate) > now;
+    }).length;
+    const pastEvents = registrations.filter((r) => {
+      const event = r.eventId as any;
+      const eventDate = event?.startDate || event?.date;
+      return eventDate && new Date(eventDate) <= now;
+    }).length;
+
     const stats = {
-      totalEvents,
+      registeredEvents,
+      attendedEvents,
       upcomingEvents,
       pastEvents,
-      nextEvent: nextEvent ? {
-        id: nextEvent._id,
-        name: nextEvent.name,
-        date: nextEvent.date,
-        location: nextEvent.location
-      } : null
+      totalEvents: registeredEvents,
     };
     
     console.log('Attendee Stats Response:', stats);

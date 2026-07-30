@@ -92,7 +92,8 @@ export const RegistrationQRCode: React.FC = () => {
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
                   <div>
-                    <span className="font-medium">Date:</span> {new Date(registration.eventId?.date || '').toLocaleDateString()}
+                    <span className="font-medium">Date:</span>{' '}
+                    {new Date(registration.eventId?.startDate || registration.eventId?.date || '').toLocaleDateString()}
                   </div>
                   <div>
                     <span className="font-medium">Location:</span> {registration.eventId?.location}
@@ -139,14 +140,15 @@ export const RegistrationQRCode: React.FC = () => {
               )}
 
               {/* QR Code Display */}
-              {registration.qrCode && (
-                <div className="text-center">
-                  <QRCodeDisplay value={registration.qrCode || ''} size={256} />
-                  <p className="text-sm text-gray-600 mt-4">
-                    Show this QR code at the event entrance for check-in
-                  </p>
-                </div>
-              )}
+              <div className="text-center">
+                <QRCodeDisplay
+                  registrationId={registration.registrationId}
+                  size={256}
+                />
+                <p className="text-sm text-gray-600 mt-4">
+                  Show this QR code at the event entrance for check-in
+                </p>
+              </div>
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-4">
@@ -157,10 +159,8 @@ export const RegistrationQRCode: React.FC = () => {
                   Back to Dashboard
                 </Button>
                 
-                {registration.qrCode && (
-                  <Button
-                    onClick={handleDownload}
-                  >
+                {registration.registrationId && (
+                  <Button onClick={handleDownload}>
                     Download QR Code
                   </Button>
                 )}

@@ -82,7 +82,20 @@ function App() {
               {/* QR Check-in Route */}
               <Route 
                 path="/checkin" 
-                element={<QRCheckIn />} 
+                element={
+                  <RoleProtectedRoute allowedRoles={[UserRole.STAFF, UserRole.SUPER_ADMIN, UserRole.EVENT_CREATOR]}>
+                    <QRCheckIn />
+                  </RoleProtectedRoute>
+                } 
+              />
+              
+              <Route 
+                path="/staff/scan" 
+                element={
+                  <RoleProtectedRoute allowedRoles={[UserRole.STAFF, UserRole.SUPER_ADMIN, UserRole.EVENT_CREATOR]}>
+                    <QRCheckIn />
+                  </RoleProtectedRoute>
+                } 
               />
               
               {/* Role-based Protected Routes */}

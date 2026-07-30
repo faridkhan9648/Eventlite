@@ -19,15 +19,20 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle token refresh
-api.interceptors.response.use((response) => {
-  if (response.status === 401) {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    window.location.href = '/login';
+// Handle token refresh and surface API errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      window.location.href = '/login';
+    }
+
+    const message = error.response?.data?.error || error.message || 'Request failed';
+    return Promise.reject(new Error(message));
   }
-  return response;
-});
+);
 
 // Super Admin APIs
 export const superAdminAPI = {
@@ -142,6 +147,7 @@ export const staffAPI = {
   },
   
   // Attendance
+  // Attendance / check-in
   scanQR: async (qrCode: string) => {
     const response = await api.post('/attendance/checkin', { qrCode });
     return response.data;

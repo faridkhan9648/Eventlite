@@ -42,9 +42,8 @@ export const AttendeeDashboard: React.FC = () => {
   };
 
 
-  const handleViewQRCode = (eventId: string) => {
-    // Handle QR code view
-    navigate(`/attendee/registrations/${eventId}/qr`);
+  const handleViewQRCode = (registrationId: string) => {
+    navigate(`/registration-qr/${registrationId}`);
   };
 
   // Render loading state
@@ -207,11 +206,11 @@ export const AttendeeDashboard: React.FC = () => {
                         </div>
                         <div className="text-right">
                           <StatusBadge status={event.status} />
-                          {event.qrCode && (
+                          {event.registrationId && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleViewQRCode(event.id)}
+                              onClick={() => handleViewQRCode(event.registrationId)}
                             >
                               QR Code
                             </Button>

@@ -31,8 +31,8 @@ export const StaffDashboard: React.FC = () => {
   const isLoading = statsLoading || eventsLoading;
   const hasError = statsError || eventsError;
 
-  const handleScanQR = (eventId: string) => {
-    navigate(`/staff/scan?eventId=${eventId}`);
+  const handleScanQR = () => {
+    navigate('/staff/scan');
   };
 
 
@@ -198,7 +198,7 @@ export const StaffDashboard: React.FC = () => {
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => handleScanQR(event.id)}
+                            onClick={handleScanQR}
                           >
                             <QrCode className="w-4 h-4" />
                           </Button>

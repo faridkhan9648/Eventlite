@@ -76,6 +76,17 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Event is full' });
     }
     
+    // Check if user is already registered
+    const existingRegistration = await Registration.findOne({
+      eventId: validatedData.eventId,
+      userId: validatedData.userId,
+      status: { $ne: 'cancelled' },
+    });
+
+    if (existingRegistration) {
+      return res.status(400).json({ error: 'Already registered for this event' });
+    }
+
     // Validate custom fields
     const validatedCustomFields: Record<string, any> = {};
     if (event.customFields) {
@@ -133,22 +144,20 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
     const registration = new Registration({
       eventId: validatedData.eventId,
       userId: validatedData.userId,
-      customFields: Object.fromEntries(validatedCustomFields),
+      customFields: validatedCustomFields,
       status: 'confirmed',
       registeredAt: new Date()
     });
     
     await registration.save();
     
-    // Generate QR code
-    const qrData = {
-      registrationId: registration.registrationId,
-      eventId: validatedData.eventId,
-      userId: validatedData.userId,
-      timestamp: Date.now()
-    };
-    
-    const qrCodeUrl = await QRCode.toDataURL(JSON.stringify(qrData));
+    // Generate scannable QR code containing plain registration ID
+    const qrCodeUrl = await QRCode.toDataURL(registration.registrationId!, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+    });
+    registration.qrCode = qrCodeUrl;
+    await registration.save();
     
     // Update event attendee count
     await Event.findByIdAndUpdate(validatedData.eventId, {
@@ -167,6 +176,9 @@ router.post('/register', async (req: AuthRequest, res: Response) => {
     });
     
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0]?.message || 'Invalid registration data' });
+    }
     console.error('Registration error:', error);
     res.status(500).json({ error: 'Registration failed' });
   }
@@ -182,6 +194,13 @@ router.get('/registration/:registrationId', async (req: AuthRequest, res: Respon
     if (!registration) {
       return res.status(404).json({ error: 'Registration not found' });
     }
+
+    // Always regenerate from registration ID so QR payload stays simple and scannable
+    registration.qrCode = await QRCode.toDataURL(registration.registrationId!, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+    });
+    await registration.save();
     
     res.json(registration);
   } catch (error) {
@@ -200,17 +219,22 @@ router.get('/qr-code/:registrationId', async (req: AuthRequest, res: Response) =
     if (!registration) {
       return res.status(404).json({ error: 'Registration not found' });
     }
-    
-    if (!registration.qrCode) {
-      return res.status(404).json({ error: 'QR code not available' });
+
+    let qrCode = registration.qrCode;
+
+    if (!qrCode?.startsWith('data:image')) {
+      qrCode = await QRCode.toDataURL(registration.registrationId!, {
+        errorCorrectionLevel: 'M',
+        margin: 2,
+      });
+      registration.qrCode = qrCode;
+      await registration.save();
     }
     
-    // Set response headers for image download
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Content-Disposition', `attachment; filename="qr-${registration.registrationId}.png"`);
     
-    // Convert base64 to buffer
-    const base64Data = registration.qrCode.replace(/^data:image\/png;base64,/, '');
+    const base64Data = qrCode.replace(/^data:image\/png;base64,/, '');
     const imageBuffer = Buffer.from(base64Data, 'base64');
     
     res.send(imageBuffer);
@@ -227,29 +251,33 @@ router.get('/', authenticateToken, requireRole(UserRole.ATTENDEE), async (req: A
     
     const userId = req.user!.id;
     
-    // Get user's registrations
-    const registrations = await Event.find({
-      'registrations.attendeeId': userId
-    }).select('title description date location maxAttendees currentAttendees status registrations');
+    const registrations = await Registration.find({
+      userId,
+      status: { $ne: 'cancelled' },
+    })
+      .populate('eventId')
+      .sort({ registeredAt: -1 });
     
-    // Format the response
-    const formattedRegistrations = registrations.map(event => {
-      const userRegistration = event.registrations.find(
-        (reg: any) => reg.attendeeId === userId
-      );
-      
+    const formattedRegistrations = registrations.map((registration) => {
+      const event = registration.eventId as any;
       return {
-        id: event._id,
-        title: event.title,
-        description: event.description,
-        date: event.date,
-        location: event.location,
-        maxAttendees: event.maxAttendees,
-        currentAttendees: event.currentAttendees,
-        status: event.status,
-        registrationDate: userRegistration?.registrationDate,
-        qrCode: userRegistration?.qrCode,
-        checkedIn: userRegistration?.checkedIn || false
+        id: registration._id,
+        registrationId: registration.registrationId,
+        title: event?.title || 'Unknown Event',
+        description: event?.description || '',
+        date: event?.startDate || event?.date,
+        location: event?.location || '',
+        maxAttendees: event?.maxAttendees || 0,
+        currentAttendees: event?.currentAttendees || 0,
+        status: registration.status,
+        registrationDate: registration.registeredAt,
+        qrCode: registration.qrCode,
+        checkedIn: registration.status === 'checked-in',
+        event: event ? {
+          title: event.title,
+          startDate: event.startDate,
+          location: event.location,
+        } : null,
       };
     });
     
