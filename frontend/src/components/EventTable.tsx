@@ -156,7 +156,6 @@ export const EventTable: React.FC<EventTableProps> = ({
       <div className="text-sm text-gray-600">
         Showing {sortedEvents.length} of {events.length} events
       </div>
-      </div>
 
       {/* Events Table */}
       <div className="overflow-x-auto">

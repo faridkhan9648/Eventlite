@@ -1,10 +1,11 @@
 import axios from 'axios';
 import AuthUtils from './auth';
 import { useAuthStore } from '../store/authStore';
+import { API_BASE_URL } from '../config/api';
 
 // Create axios instance
 const api = axios.create({
-  baseURL: 'http://localhost:5001/api',
+  baseURL: `${API_BASE_URL}/api`,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -38,7 +39,7 @@ api.interceptors.response.use(
         // Try to refresh the token
         const refreshToken = localStorage.getItem('refreshToken');
         if (refreshToken) {
-          const response = await axios.post('http://localhost:5000/api/auth/refresh', {
+          const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
             refreshToken
           });
 

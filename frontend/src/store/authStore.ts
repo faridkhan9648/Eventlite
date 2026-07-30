@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User } from '../types/rbac';
 import AuthUtils from '../utils/auth';
+import { API_BASE_URL } from '../config/api';
 
 interface AuthState {
   user: User | null;
@@ -71,7 +72,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           const requestBody = JSON.stringify({ email, password });
           console.log('Login request body being sent:', requestBody);
-          const response = await fetch('http://localhost:5000/api/auth/login', {
+          const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -119,7 +120,7 @@ export const useAuthStore = create<AuthState>()(
       // Test backend connectivity
       testBackendConnection: async () => {
         try {
-          const response = await fetch('http://localhost:5000/health');
+          const response = await fetch(`${API_BASE_URL}/health`);
           if (response.ok) {
             return { success: true, message: 'Backend is reachable' };
           } else {
@@ -136,7 +137,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           const requestBody = JSON.stringify({ username, email, password, role });
           console.log('Request body being sent:', requestBody);
-          const response = await fetch('http://localhost:5000/api/auth/register', {
+          const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -193,7 +194,7 @@ export const useAuthStore = create<AuthState>()(
 
       logout: async () => {
         try {
-          await fetch('http://localhost:5000/api/auth/logout', {
+          await fetch(`${API_BASE_URL}/api/auth/logout`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${AuthUtils.getToken()}`,
