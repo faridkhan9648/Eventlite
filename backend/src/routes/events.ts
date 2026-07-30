@@ -194,7 +194,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     // Staff can only see events assigned to them
-    if (req.user?.role === UserRole.STAFF && !event.assignedStaff.includes(req.user.id)) {
+    if (req.user?.role === UserRole.STAFF && !event.assignedStaff.some(staffId => staffId.toString() === req.user!.id)) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -421,7 +421,7 @@ router.get('/:id/qrcode', authenticate, async (req: AuthRequest, res: Response) 
     }
 
     // Staff can only access QR codes for assigned events
-    if (req.user?.role === UserRole.STAFF && !event.assignedStaff.includes(req.user.id)) {
+    if (req.user?.role === UserRole.STAFF && !event.assignedStaff.some(staffId => staffId.toString() === req.user!.id)) {
       return res.status(403).json({ error: 'Access denied' });
     }
 

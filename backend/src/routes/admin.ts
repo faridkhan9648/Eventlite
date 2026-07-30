@@ -175,20 +175,14 @@ router.get('/users', requireSuperAdmin, async (req: AuthRequest, res: Response) 
     // Add tenant information for users
     const usersWithTenantInfo = await Promise.all(
       users.map(async (user) => {
-        const userObj = user.toObject();
-        
-        if (user.role === 'event_creator') {
-          userObj.userCount = await User.countDocuments({ 
-            isActive: true 
-          });
-        }
-        
-        if (user.role !== 'super_admin') {
-          userObj.tenantName = user.username;
-        } else {
-          userObj.tenantName = 'System';
-        }
-        
+        const userObj = {
+          ...user.toObject(),
+          ...(user.role === 'event_creator'
+            ? { userCount: await User.countDocuments({ isActive: true }) }
+            : {}),
+          tenantName: user.role !== 'super_admin' ? user.username : 'System'
+        };
+
         return formatUserResponse(userObj);
       })
     );

@@ -38,13 +38,13 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
 export const authenticate = authenticateToken;
 
 // Role-based access control middleware
-export const requireRole = (roles: UserRole | UserRole[]) => {
+export const requireRole = (...roles: (UserRole | UserRole[])[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const allowedRoles = Array.isArray(roles) ? roles : [roles];
+    const allowedRoles = roles.flatMap(role => Array.isArray(role) ? role : [role]);
     
     if (!allowedRoles.includes(req.user.role)) {
       return res.status(403).json({ 

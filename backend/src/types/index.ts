@@ -14,6 +14,8 @@ export interface IUser extends Document {
   primaryColor?: string;
   isActive: boolean;
   refreshToken?: string;
+  registeredEvents?: Types.ObjectId[];
+  assignedEvents?: Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
   getPermissions(): Permission[];

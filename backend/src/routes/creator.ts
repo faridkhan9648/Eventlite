@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { User } from '../models/User';
 import { Event } from '../models/Event';
+import { Registration } from '../models/Registration';
 import { authenticateToken, requireRole } from '../middleware/rbac';
 import { AuthRequest, UserRole } from '../types';
 
@@ -65,35 +66,34 @@ router.get('/attendees', authenticateToken, requireRole(UserRole.EVENT_CREATOR),
     
     const userId = req.user!.id;
     
-    // Get user's events with their registrations
-    const events = await Event.find({ createdBy: userId });
-    
-    // Flatten all registrations from all events
-    const attendeeRecords = [];
-    
-    for (const event of events) {
-      if (event.registrations && event.registrations.length > 0) {
-        for (const registration of event.registrations) {
-          // Get user details for each registration
-          const user = await User.findById(registration.attendeeId);
-          if (user) {
-            attendeeRecords.push({
-              id: registration._id || `${event._id}-${registration.attendeeId}`,
-              attendeeName: user.name || user.username,
-              attendeeEmail: user.email,
-              eventName: event.title,
-              eventDate: event.startDate,
-              eventLocation: event.location,
-              registrationDate: registration.registrationDate || event.createdAt,
-              checkedIn: registration.checkedIn || false,
-              checkInTime: registration.checkInTime || null,
-              qrCode: registration.qrCode || null,
-              status: registration.checkedIn ? 'checked-in' : 'confirmed'
-            });
-          }
-        }
-      }
-    }
+    // Get registrations for events created by this creator.
+    const events = await Event.find({ createdBy: userId }).select('_id title startDate location createdAt');
+    const eventIds = events.map(event => event._id);
+    const eventMap = new Map(events.map(event => [event._id.toString(), event]));
+
+    const registrations = await Registration.find({ eventId: { $in: eventIds } })
+      .populate('userId')
+      .sort({ registeredAt: -1 });
+
+    const attendeeRecords = registrations.map(registration => {
+      const event = eventMap.get(registration.eventId?.toString() || '');
+      const user = registration.userId as any;
+      const checkedIn = registration.status === 'checked-in';
+
+      return {
+        id: registration._id,
+        attendeeName: user?.firstName || user?.username || 'Attendee',
+        attendeeEmail: user?.email || '',
+        eventName: event?.title || 'Unknown Event',
+        eventDate: event?.startDate,
+        eventLocation: event?.location || '',
+        registrationDate: registration.registeredAt || event?.createdAt,
+        checkedIn,
+        checkInTime: registration.checkedInAt || null,
+        qrCode: registration.qrCode || null,
+        status: registration.status || 'pending'
+      };
+    });
     
     console.log('Creator Attendees Response:', attendeeRecords.length, 'records');
     res.json(attendeeRecords);

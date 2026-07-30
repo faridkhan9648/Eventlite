@@ -1,4 +1,5 @@
 import { Router, Response } from 'express';
+import mongoose from 'mongoose';
 import { z } from 'zod';
 import { Event } from '../models/Event';
 import { User } from '../models/User';
@@ -33,7 +34,10 @@ router.post('/', authenticate, allowRoles(UserRole.ATTENDEE), async (req: AuthRe
 
     // Check if user is already registered
     const user = await User.findById(req.user!.id);
-    if (user.registeredEvents?.includes(eventId)) {
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (user.registeredEvents?.some(id => id.toString() === eventId)) {
       return res.status(400).json({ error: 'Already registered for this event' });
     }
 
@@ -42,7 +46,7 @@ router.post('/', authenticate, allowRoles(UserRole.ATTENDEE), async (req: AuthRe
     await event.save();
 
     user.registeredEvents = user.registeredEvents || [];
-    user.registeredEvents.push(eventId);
+    user.registeredEvents.push(new mongoose.Types.ObjectId(eventId));
     await user.save();
 
     res.json({
@@ -64,7 +68,7 @@ router.post('/', authenticate, allowRoles(UserRole.ATTENDEE), async (req: AuthRe
 router.get('/my-registrations', authenticate, allowRoles(UserRole.ATTENDEE), async (req: AuthRequest, res: Response) => {
   try {
     const user = await User.findById(req.user!.id).populate('registeredEvents');
-    
+
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -105,7 +109,10 @@ router.delete('/:eventId', authenticate, allowRoles(UserRole.ATTENDEE), async (r
     }
 
     const user = await User.findById(req.user!.id);
-    if (!user.registeredEvents?.includes(eventId)) {
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (!user.registeredEvents?.some(id => id.toString() === eventId)) {
       return res.status(400).json({ error: 'Not registered for this event' });
     }
 
@@ -113,7 +120,7 @@ router.delete('/:eventId', authenticate, allowRoles(UserRole.ATTENDEE), async (r
     event.currentAttendees = Math.max(0, event.currentAttendees - 1);
     await event.save();
 
-    user.registeredEvents = user.registeredEvents.filter((id: string) => id !== eventId);
+    user.registeredEvents = user.registeredEvents.filter(id => id.toString() !== eventId);
     await user.save();
 
     res.json({

@@ -1,7 +1,8 @@
-import mongoose, { Schema } from 'mongoose';
+import mongoose, { Schema, Types } from 'mongoose';
 
 export interface IRegistration {
   eventId?: string;
+  userId?: Types.ObjectId;
   customFields?: Record<string, any>;
   qrCode?: string;
   registrationId?: string;
@@ -63,4 +64,4 @@ registrationSchema.pre('save', async function(next) {
   next();
 });
 
-export const Registration = mongoose.model('Registration', registrationSchema);
+export const Registration = mongoose.model<IRegistration>('Registration', registrationSchema);

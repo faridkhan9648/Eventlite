@@ -114,7 +114,7 @@ router.get('/attendee/stats', authenticateToken, requireRole(UserRole.ATTENDEE),
       pastEvents,
       nextEvent: nextEvent ? {
         id: nextEvent._id,
-        name: nextEvent.name,
+        name: nextEvent.title,
         date: nextEvent.date,
         location: nextEvent.location
       } : null
