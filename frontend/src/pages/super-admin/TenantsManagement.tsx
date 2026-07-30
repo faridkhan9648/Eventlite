@@ -33,6 +33,7 @@ export const TenantsManagement: React.FC = () => {
   const [formData, setFormData] = React.useState({
     name: '',
     email: '',
+    password: '',
     primaryColor: '#3B82F6',
     contactInfo: { phone: '' }
   });
@@ -49,7 +50,7 @@ export const TenantsManagement: React.FC = () => {
     if (!tenant) return false;
     
     const name = tenant.name || '';
-    const email = tenant.email || '';
+    const email = tenant.email || tenant.contactInfo?.email || '';
     
     return name.toLowerCase().includes(searchTerm.toLowerCase()) ||
            email.toLowerCase().includes(searchTerm.toLowerCase());
@@ -70,6 +71,7 @@ export const TenantsManagement: React.FC = () => {
       setFormData({
         name: '',
         email: '',
+        password: '',
         primaryColor: '#3B82F6',
         contactInfo: { phone: '' }
       });
@@ -82,20 +84,23 @@ export const TenantsManagement: React.FC = () => {
     if (!selectedTenant) return;
     
     try {
+      const { password, ...updateData } = formData;
       await updateMutation.mutateAsync({
-        id: selectedTenant.id,
-        data: formData
+        id: selectedTenant.id || selectedTenant._id,
+        data: updateData
       });
       setShowModal(false);
       setSelectedTenant(null);
       setFormData({
         name: '',
         email: '',
+        password: '',
         primaryColor: '#3B82F6',
         contactInfo: { phone: '' }
       });
     } catch (error) {
       console.error('Failed to update tenant:', error);
+      alert(error instanceof Error ? error.message : 'Failed to update tenant');
     }
   };
   
@@ -103,7 +108,7 @@ export const TenantsManagement: React.FC = () => {
     if (!selectedTenant) return;
     
     try {
-      await deleteMutation.mutateAsync(selectedTenant.id);
+      await deleteMutation.mutateAsync(selectedTenant.id || selectedTenant._id);
       setShowConfirmModal(false);
       setSelectedTenant(null);
     } catch (error) {
@@ -115,7 +120,8 @@ export const TenantsManagement: React.FC = () => {
     setSelectedTenant(tenant);
     setFormData({
       name: tenant.name,
-      email: tenant.email,
+      email: tenant.email || tenant.contactInfo?.email || '',
+      password: '',
       primaryColor: tenant.primaryColor,
       contactInfo: { phone: tenant.contactInfo?.phone || '' }
     });
@@ -157,7 +163,17 @@ export const TenantsManagement: React.FC = () => {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-gray-900">Tenant Management</h1>
-            <Button onClick={() => setShowModal(true)}>
+            <Button onClick={() => {
+              setSelectedTenant(null);
+              setFormData({
+                name: '',
+                email: '',
+                password: '',
+                primaryColor: '#3B82F6',
+                contactInfo: { phone: '' }
+              });
+              setShowModal(true);
+            }}>
               <Plus className="w-4 h-4 mr-2" />
               Create Tenant
             </Button>
@@ -200,7 +216,7 @@ export const TenantsManagement: React.FC = () => {
                               <span className="font-medium">{tenant.name || 'N/A'}</span>
                             </div>
                           </td>
-                          <td className="py-4 px-4">{tenant.email || 'N/A'}</td>
+                          <td className="py-4 px-4">{tenant.email || tenant.contactInfo?.email || 'N/A'}</td>
                           <td className="py-4 px-4">{tenant.contactInfo?.phone || '-'}</td>
                           <td className="py-4 px-4">
                             <StatusBadge status={tenant.isActive ? 'active' : 'inactive'} />
@@ -278,6 +294,17 @@ export const TenantsManagement: React.FC = () => {
                 type="email"
               />
             </div>
+            {!selectedTenant && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                <Input
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder="Enter password (min 6 characters)"
+                  type="password"
+                />
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
               <Input
@@ -307,6 +334,7 @@ export const TenantsManagement: React.FC = () => {
                   setFormData({
                     name: '',
                     email: '',
+                    password: '',
                     primaryColor: '#3B82F6',
                     contactInfo: { phone: '' }
                   });

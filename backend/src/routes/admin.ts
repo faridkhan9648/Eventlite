@@ -12,6 +12,54 @@ import {
 
 const router = Router();
 
+const formatUserResponse = (user: any) => {
+  const obj = user.toObject ? user.toObject() : user;
+  const id = obj._id?.toString?.() || obj.id?.toString?.() || String(obj._id || obj.id || '');
+  return {
+    id,
+    username: obj.username,
+    email: obj.email,
+    role: obj.role,
+    firstName: obj.firstName || '',
+    lastName: obj.lastName || '',
+    name: [obj.firstName, obj.lastName].filter(Boolean).join(' ') || obj.username,
+    isActive: obj.isActive !== false,
+    tenantName: obj.tenantName,
+    userCount: obj.userCount,
+    createdAt: obj.createdAt,
+    updatedAt: obj.updatedAt,
+  };
+};
+
+const formatTenantResponse = (tenant: any, stats?: { userCount?: number; eventCount?: number }) => {
+  const obj = tenant.toObject ? tenant.toObject() : tenant;
+  const id = obj._id?.toString?.() || obj.id?.toString?.() || String(obj._id || obj.id || '');
+  return {
+    id,
+    name: obj.username,
+    email: obj.email,
+    logo: '',
+    primaryColor: obj.primaryColor || '#3B82F6',
+    contactInfo: {
+      email: obj.email,
+      phone: obj.phone || '',
+    },
+    isActive: obj.isActive !== false,
+    createdAt: obj.createdAt,
+    userCount: stats?.userCount ?? 0,
+    eventCount: stats?.eventCount ?? 0,
+  };
+};
+
+const defaultSettings = {
+  eventRegistration: { enabled: true, requireApproval: false },
+  emailNotifications: { enabled: true, registrationConfirm: true, eventReminders: true },
+  security: { twoFactorRequired: false, sessionTimeout: 60 },
+  backup: { autoBackup: true, frequency: 'daily' },
+};
+
+let platformSettings = { ...defaultSettings };
+
 // All admin routes require authentication
 router.use(authenticateToken);
 
@@ -97,7 +145,7 @@ router.get('/users', requireSuperAdmin, async (req: AuthRequest, res: Response) 
     console.log('👥 Admin Users Request - User:', req.user!.username);
     
     const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
+    const limit = parseInt(req.query.limit as string) || 1000;
     const role = req.query.role as string;
     const search = req.query.search as string;
     const skip = (page - 1) * limit;
@@ -129,21 +177,19 @@ router.get('/users', requireSuperAdmin, async (req: AuthRequest, res: Response) 
       users.map(async (user) => {
         const userObj = user.toObject();
         
-        // For event creators, count their users
         if (user.role === 'event_creator') {
           userObj.userCount = await User.countDocuments({ 
             isActive: true 
           });
         }
         
-        // For non-super_admin users, find their tenant
         if (user.role !== 'super_admin') {
-          userObj.tenantName = user.username; // For now, use username as tenant name
+          userObj.tenantName = user.username;
         } else {
           userObj.tenantName = 'System';
         }
         
-        return userObj;
+        return formatUserResponse(userObj);
       })
     );
     
@@ -163,12 +209,52 @@ router.get('/users', requireSuperAdmin, async (req: AuthRequest, res: Response) 
   }
 });
 
-// PATCH /admin/users/:id - Update user status or role
+// POST /admin/users - Create new user
+router.post('/users', requireSuperAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const { username, email, password, role = 'attendee', firstName, lastName } = req.body;
+
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'Username, email, and password are required' });
+    }
+
+    if (role === UserRole.SUPER_ADMIN) {
+      return res.status(403).json({ error: 'Cannot create super admin users via this endpoint' });
+    }
+
+    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+    if (existingUser) {
+      return res.status(400).json({ error: 'User with this email or username already exists' });
+    }
+
+    const user = new User({
+      username,
+      email,
+      password,
+      role,
+      firstName: firstName || '',
+      lastName: lastName || '',
+      isActive: true,
+    });
+
+    await user.save();
+
+    res.status(201).json({
+      message: 'User created successfully',
+      user: formatUserResponse(user),
+    });
+  } catch (error) {
+    console.error('❌ Error creating admin user:', error);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+// PATCH /admin/users/:id - Update user
 router.patch('/users/:id', requireSuperAdmin, async (req: AuthRequest, res: Response) => {
   try {
     console.log('🔧 Admin User Update Request - User:', req.user!.username, 'Target:', req.params.id);
     
-    const { isActive, role } = req.body;
+    const { isActive, role, username, email, firstName, lastName } = req.body;
     const userId = req.params.id;
     
     // Find user
@@ -177,17 +263,38 @@ router.patch('/users/:id', requireSuperAdmin, async (req: AuthRequest, res: Resp
       return res.status(404).json({ error: 'User not found' });
     }
     
-    // Prevent super admin from modifying themselves
-    if (user._id.toString() === req.user!.id) {
-      return res.status(403).json({ error: 'Cannot modify your own account' });
+    // Prevent super admin from changing their own role/status
+    const isSelf = user._id.toString() === req.user!.id;
+
+    if (role === UserRole.SUPER_ADMIN && user.role !== UserRole.SUPER_ADMIN) {
+      return res.status(403).json({ error: 'Cannot assign super admin role' });
     }
-    
-    // Update user
+
+    if (isSelf && role !== undefined && role !== user.role) {
+      return res.status(403).json({ error: 'Cannot change your own role' });
+    }
+
+    if (isSelf && isActive !== undefined && isActive !== user.isActive) {
+      return res.status(403).json({ error: 'Cannot change your own status' });
+    }
+
     if (isActive !== undefined) {
       user.isActive = isActive;
     }
     if (role !== undefined) {
       user.role = role;
+    }
+    if (username !== undefined) {
+      user.username = username;
+    }
+    if (email !== undefined) {
+      user.email = email;
+    }
+    if (firstName !== undefined) {
+      user.firstName = firstName;
+    }
+    if (lastName !== undefined) {
+      user.lastName = lastName;
     }
     
     await user.save();
@@ -195,13 +302,7 @@ router.patch('/users/:id', requireSuperAdmin, async (req: AuthRequest, res: Resp
     console.log('✅ Admin User Updated:', user.email);
     res.json({
       message: 'User updated successfully',
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        isActive: user.isActive
-      }
+      user: formatUserResponse(user),
     });
   } catch (error) {
     console.error('❌ Error updating admin user:', error);
@@ -215,7 +316,7 @@ router.get('/events', requireSuperAdmin, async (req: AuthRequest, res: Response)
     console.log('📅 Admin Events Request - User:', req.user!.username);
     
     const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
+    const limit = parseInt(req.query.limit as string) || 1000;
     const status = req.query.status as string;
     const search = req.query.search as string;
     const skip = (page - 1) * limit;
@@ -275,7 +376,7 @@ router.get('/tenants', requireSuperAdmin, async (req: AuthRequest, res: Response
     console.log('🏢 Admin Tenants Request - User:', req.user!.username);
     
     const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
+    const limit = parseInt(req.query.limit as string) || 1000;
     const skip = (page - 1) * limit;
     
     // Get event creators (tenants)
@@ -299,20 +400,7 @@ router.get('/tenants', requireSuperAdmin, async (req: AuthRequest, res: Response
           createdBy: tenant._id 
         });
         
-        return {
-          id: tenant._id,
-          name: tenant.username,
-          logo: '', // TODO: Add logo field to user schema
-          primaryColor: '#3B82F6', // Default color
-          contactInfo: {
-            email: tenant.email,
-            phone: '+1-555-0000' // TODO: Add phone field to user schema
-          },
-          isActive: tenant.isActive,
-          createdAt: tenant.createdAt,
-          userCount,
-          eventCount
-        };
+        return formatTenantResponse(tenant, { userCount, eventCount });
       })
     );
     
@@ -338,6 +426,10 @@ router.post('/tenants', requireSuperAdmin, async (req: AuthRequest, res: Respons
     console.log('➕ Admin Create Tenant Request - User:', req.user!.username);
     
     const { name, email, password, primaryColor = '#3B82F6', contactInfo } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required' });
+    }
     
     // Check if tenant already exists
     const existingTenant = await User.findOne({ email });
@@ -351,7 +443,9 @@ router.post('/tenants', requireSuperAdmin, async (req: AuthRequest, res: Respons
       email,
       password,
       role: 'event_creator',
-      isActive: true
+      isActive: true,
+      primaryColor,
+      phone: contactInfo?.phone || '',
     });
     
     await tenant.save();
@@ -359,14 +453,7 @@ router.post('/tenants', requireSuperAdmin, async (req: AuthRequest, res: Respons
     console.log('✅ Admin Tenant Created:', tenant.email);
     res.status(201).json({
       message: 'Tenant created successfully',
-      tenant: {
-        id: tenant._id,
-        name: tenant.username,
-        email: tenant.email,
-        role: tenant.role,
-        isActive: tenant.isActive,
-        createdAt: tenant.createdAt
-      }
+      tenant: formatTenantResponse(tenant, { userCount: 0, eventCount: 0 }),
     });
   } catch (error) {
     console.error('❌ Error creating admin tenant:', error);
@@ -374,15 +461,14 @@ router.post('/tenants', requireSuperAdmin, async (req: AuthRequest, res: Respons
   }
 });
 
-// PATCH /admin/tenants/:id - Update tenant status
+// PATCH /admin/tenants/:id - Update tenant
 router.patch('/tenants/:id', requireSuperAdmin, async (req: AuthRequest, res: Response) => {
   try {
     console.log('🔧 Admin Tenant Update Request - User:', req.user!.username, 'Target:', req.params.id);
     
-    const { isActive } = req.body;
+    const { isActive, name, email, primaryColor, contactInfo } = req.body;
     const tenantId = req.params.id;
     
-    // Find tenant
     const tenant = await User.findById(tenantId);
     if (!tenant) {
       return res.status(404).json({ error: 'Tenant not found' });
@@ -392,23 +478,99 @@ router.patch('/tenants/:id', requireSuperAdmin, async (req: AuthRequest, res: Re
       return res.status(400).json({ error: 'User is not a tenant' });
     }
     
-    // Update tenant status
-    tenant.isActive = isActive;
+    if (isActive !== undefined) {
+      tenant.isActive = isActive;
+    }
+    if (name !== undefined) {
+      tenant.username = name;
+    }
+    if (email !== undefined) {
+      tenant.email = email;
+    }
+    if (primaryColor !== undefined) {
+      tenant.primaryColor = primaryColor;
+    }
+    if (contactInfo?.phone !== undefined) {
+      tenant.phone = contactInfo.phone;
+    }
+
     await tenant.save();
     
+    const eventCount = await Event.countDocuments({ createdBy: tenant._id });
     console.log('✅ Admin Tenant Updated:', tenant.email);
     res.json({
       message: 'Tenant updated successfully',
-      tenant: {
-        id: tenant._id,
-        name: tenant.username,
-        email: tenant.email,
-        isActive: tenant.isActive
-      }
+      tenant: formatTenantResponse(tenant, { eventCount }),
     });
   } catch (error) {
     console.error('❌ Error updating admin tenant:', error);
     res.status(500).json({ error: 'Failed to update tenant' });
+  }
+});
+
+// DELETE /admin/tenants/:id - Delete tenant
+router.delete('/tenants/:id', requireSuperAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const tenantId = req.params.id;
+
+    if (req.user!.id === tenantId) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+
+    const tenant = await User.findById(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+
+    if (tenant.role !== 'event_creator') {
+      return res.status(400).json({ error: 'User is not a tenant' });
+    }
+
+    await User.findByIdAndDelete(tenantId);
+
+    res.json({ message: 'Tenant deleted successfully' });
+  } catch (error) {
+    console.error('❌ Error deleting admin tenant:', error);
+    res.status(500).json({ error: 'Failed to delete tenant' });
+  }
+});
+
+// GET /admin/settings - Get platform settings
+router.get('/settings', requireSuperAdmin, async (_req: AuthRequest, res: Response) => {
+  res.json(platformSettings);
+});
+
+// PATCH /admin/settings - Update platform settings
+router.patch('/settings', requireSuperAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    platformSettings = {
+      ...platformSettings,
+      ...req.body,
+      eventRegistration: {
+        ...platformSettings.eventRegistration,
+        ...(req.body.eventRegistration || {}),
+      },
+      emailNotifications: {
+        ...platformSettings.emailNotifications,
+        ...(req.body.emailNotifications || {}),
+      },
+      security: {
+        ...platformSettings.security,
+        ...(req.body.security || {}),
+      },
+      backup: {
+        ...platformSettings.backup,
+        ...(req.body.backup || {}),
+      },
+    };
+
+    res.json({
+      message: 'Settings updated successfully',
+      settings: platformSettings,
+    });
+  } catch (error) {
+    console.error('❌ Error updating settings:', error);
+    res.status(500).json({ error: 'Failed to update settings' });
   }
 });
 

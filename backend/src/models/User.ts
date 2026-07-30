@@ -31,6 +31,29 @@ const userSchema = new Schema<IUser>({
     default: UserRole.ATTENDEE,
     required: true
   },
+  firstName: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  lastName: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  phone: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  primaryColor: {
+    type: String,
+    default: '#3B82F6'
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  },
   refreshToken: {
     type: String,
     default: null

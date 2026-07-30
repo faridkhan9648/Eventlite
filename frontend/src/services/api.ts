@@ -38,12 +38,61 @@ api.interceptors.response.use(
 export const superAdminAPI = {
   // Users
   getUsers: async () => {
-    const response = await api.get('/admin/users');
+    const response = await api.get('/admin/users', { params: { limit: 1000 } });
+    return response.data;
+  },
+
+  createUser: async (data: {
+    username: string;
+    email: string;
+    password: string;
+    role?: string;
+    firstName?: string;
+    lastName?: string;
+  }) => {
+    const response = await api.post('/admin/users', data);
+    return response.data;
+  },
+
+  updateUser: async (id: string, data: Record<string, unknown>) => {
+    const response = await api.patch(`/admin/users/${id}`, data);
+    return response.data;
+  },
+
+  deleteUser: async (id: string) => {
+    const response = await api.delete(`/admin/users/${id}`);
     return response.data;
   },
   
   getTenants: async () => {
-    const response = await api.get('/admin/tenants');
+    const response = await api.get('/admin/tenants', { params: { limit: 1000 } });
+    return response.data;
+  },
+
+  createTenant: async (data: {
+    name: string;
+    email: string;
+    password: string;
+    primaryColor?: string;
+    contactInfo?: { phone?: string };
+  }) => {
+    const response = await api.post('/admin/tenants', {
+      name: data.name,
+      email: data.email,
+      password: data.password,
+      primaryColor: data.primaryColor,
+      contactInfo: data.contactInfo,
+    });
+    return response.data;
+  },
+
+  updateTenant: async (id: string, data: Record<string, unknown>) => {
+    const response = await api.patch(`/admin/tenants/${id}`, data);
+    return response.data;
+  },
+
+  deleteTenant: async (id: string) => {
+    const response = await api.delete(`/admin/tenants/${id}`);
     return response.data;
   },
   
@@ -58,12 +107,29 @@ export const superAdminAPI = {
     const response = await api.get('/admin/reports');
     return response.data;
   },
+
+  getReport: async (endpoint: string) => {
+    const path = endpoint.startsWith('/admin') ? endpoint.slice('/admin'.length) : endpoint;
+    const response = await api.get(`/admin${path}`);
+    return response.data;
+  },
   
   // Stats
   getStats: async () => {
     const response = await api.get('/admin/stats');
     return response.data;
-  }
+  },
+
+  // Settings
+  getSettings: async () => {
+    const response = await api.get('/admin/settings');
+    return response.data;
+  },
+
+  updateSettings: async (data: Record<string, unknown>) => {
+    const response = await api.patch('/admin/settings', data);
+    return response.data;
+  },
 };
 
 // Event Creator APIs

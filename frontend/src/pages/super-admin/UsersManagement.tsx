@@ -34,6 +34,7 @@ export const UsersManagement: React.FC = () => {
   const [formData, setFormData] = React.useState({
     username: '',
     email: '',
+    password: '',
     firstName: '',
     lastName: '',
     role: 'attendee'
@@ -77,6 +78,7 @@ export const UsersManagement: React.FC = () => {
       setFormData({
         username: '',
         email: '',
+        password: '',
         firstName: '',
         lastName: '',
         role: 'attendee'
@@ -90,21 +92,24 @@ export const UsersManagement: React.FC = () => {
     if (!selectedUser) return;
     
     try {
+      const { password, ...updateData } = formData;
       await updateMutation.mutateAsync({
-        id: selectedUser.id,
-        data: formData
+        id: selectedUser.id || selectedUser._id,
+        data: updateData
       });
       setShowModal(false);
       setSelectedUser(null);
       setFormData({
         username: '',
         email: '',
+        password: '',
         firstName: '',
         lastName: '',
         role: 'attendee'
       });
     } catch (error) {
       console.error('Failed to update user:', error);
+      alert(error instanceof Error ? error.message : 'Failed to update user');
     }
   };
   
@@ -112,7 +117,7 @@ export const UsersManagement: React.FC = () => {
     if (!selectedUser) return;
     
     try {
-      await deleteMutation.mutateAsync(selectedUser.id);
+      await deleteMutation.mutateAsync(selectedUser.id || selectedUser._id);
       setShowConfirmModal(false);
       setSelectedUser(null);
     } catch (error) {
@@ -123,11 +128,12 @@ export const UsersManagement: React.FC = () => {
   const openEditModal = (user: any) => {
     setSelectedUser(user);
     setFormData({
-      username: user.username,
-      email: user.email,
+      username: user.username || '',
+      email: user.email || '',
+      password: '',
       firstName: user.firstName || '',
       lastName: user.lastName || '',
-      role: user.role
+      role: user.role || 'attendee'
     });
     setShowModal(true);
   };
@@ -167,7 +173,18 @@ export const UsersManagement: React.FC = () => {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-            <Button onClick={() => setShowModal(true)}>
+            <Button onClick={() => {
+              setSelectedUser(null);
+              setFormData({
+                username: '',
+                email: '',
+                password: '',
+                firstName: '',
+                lastName: '',
+                role: 'attendee'
+              });
+              setShowModal(true);
+            }}>
               <Plus className="w-4 h-4 mr-2" />
               Create User
             </Button>
@@ -210,7 +227,7 @@ export const UsersManagement: React.FC = () => {
                     </thead>
                     <tbody>
                       {paginatedUsers.map((user: any) => (
-                        <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <tr key={user.id || user._id} className="border-b border-gray-100 hover:bg-gray-50">
                           <td className="py-4 px-4">
                             <div className="flex items-center space-x-3">
                               <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
@@ -320,6 +337,17 @@ export const UsersManagement: React.FC = () => {
                 placeholder="Enter last name"
               />
             </div>
+            {!selectedUser && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                <Input
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder="Enter password (min 6 characters)"
+                  type="password"
+                />
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
               <select

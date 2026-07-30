@@ -8,6 +8,11 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: UserRole;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  primaryColor?: string;
+  isActive: boolean;
   refreshToken?: string;
   createdAt: Date;
   updatedAt: Date;
