@@ -39,6 +39,7 @@ export const useCreateEvent = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['event-creator', 'events'] });
       queryClient.invalidateQueries({ queryKey: ['event-creator', 'stats'] });
+      queryClient.invalidateQueries({ queryKey: ['public'] });
     },
   });
 };
@@ -51,6 +52,20 @@ export const useUpdateEvent = () => {
       eventCreatorAPI.updateEvent(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['event-creator', 'events'] });
+      queryClient.invalidateQueries({ queryKey: ['public'] });
+    },
+  });
+};
+
+export const usePublishEvent = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (id: string) => eventCreatorAPI.publishEvent(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['event-creator', 'events'] });
+      queryClient.invalidateQueries({ queryKey: ['event-creator', 'stats'] });
+      queryClient.invalidateQueries({ queryKey: ['public'] });
     },
   });
 };
@@ -63,6 +78,7 @@ export const useDeleteEvent = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['event-creator', 'events'] });
       queryClient.invalidateQueries({ queryKey: ['event-creator', 'stats'] });
+      queryClient.invalidateQueries({ queryKey: ['public'] });
     },
   });
 };

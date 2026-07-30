@@ -18,7 +18,7 @@ export const CreateEvent: React.FC = () => {
     startDate: '',
     endDate: '',
     maxAttendees: '50',
-    status: 'draft'
+    status: 'published'
   });
 
   const handleSubmit = async (e: React.FormEvent) => {

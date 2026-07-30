@@ -34,21 +34,28 @@ const eventFilterSchema = z.object({
 // Get public events (no authentication required)
 router.get('/public-events', async (req: AuthRequest, res: Response) => {
   try {
+    // Include published events that are upcoming or ongoing (or started within the last 24h)
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const events = await Event.find({ 
       status: 'published',
-      startDate: { $gte: new Date() } // Only upcoming events
+      $or: [
+        { endDate: { $gte: new Date() } },
+        { startDate: { $gte: yesterday } }
+      ]
     }).sort({ startDate: 1 });
 
     res.json(events.map(event => ({
       _id: event._id,
       title: event.title,
       description: event.description,
-      date: event.startDate,
+      date: event.startDate || event.date,
+      startDate: event.startDate,
+      endDate: event.endDate,
       location: event.location,
       maxAttendees: event.maxAttendees,
       currentAttendees: event.currentAttendees,
-      isPublic: true,
-      requireApproval: false,
+      isPublic: event.isPublic !== undefined ? event.isPublic : true,
+      requireApproval: event.requireApproval || false,
       createdBy: event.createdBy,
       createdAt: event.createdAt,
       updatedAt: event.updatedAt

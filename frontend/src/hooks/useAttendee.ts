@@ -57,6 +57,7 @@ export const useRegisterForEvent = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendee', 'registrations'] });
       queryClient.invalidateQueries({ queryKey: ['attendee', 'stats'] });
+      queryClient.invalidateQueries({ queryKey: ['public'] });
     },
   });
 };

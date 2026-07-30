@@ -150,6 +150,11 @@ export const eventCreatorAPI = {
     return response.data;
   },
   
+  publishEvent: async (id: string) => {
+    const response = await api.post(`/events/${id}/publish`);
+    return response.data;
+  },
+  
   deleteEvent: async (id: string) => {
     const response = await api.delete(`/events/${id}`);
     return response.data;

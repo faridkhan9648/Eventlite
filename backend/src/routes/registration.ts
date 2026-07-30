@@ -23,9 +23,17 @@ router.get('/public-events', async (req: AuthRequest, res: Response) => {
     const events = await Event.find({ 
       isPublic: true, 
       status: 'published' 
-    }).select('title description date location maxAttendees currentAttendees customFields createdBy createdAt');
+    }).select('title description date startDate endDate location maxAttendees currentAttendees customFields createdBy createdAt');
     
-    res.json(events);
+    const formattedEvents = events.map(event => {
+      const obj = event.toObject();
+      return {
+        ...obj,
+        date: obj.date || obj.startDate,
+      };
+    });
+
+    res.json(formattedEvents);
   } catch (error) {
     console.error('Error fetching public events:', error);
     res.status(500).json({ error: 'Failed to fetch events' });

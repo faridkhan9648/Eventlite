@@ -19,11 +19,13 @@ import { RoleProtectedRoute } from '../../components/RoleProtectedRoute';
 import { UserRole } from '../../types/rbac';
 import { 
   useEventCreatorStats,
-  useEventCreatorEvents
+  useEventCreatorEvents,
+  usePublishEvent
 } from '../../hooks/useEventCreator';
 
 export const CreatorDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const publishMutation = usePublishEvent();
   
   // React Query hooks for data fetching
   const { data: stats, isLoading: statsLoading, error: statsError } = useEventCreatorStats();
@@ -31,6 +33,15 @@ export const CreatorDashboard: React.FC = () => {
   
   const isLoading = statsLoading || eventsLoading;
   const hasError = statsError || eventsError;
+
+  const handlePublish = async (id: string) => {
+    try {
+      await publishMutation.mutateAsync(id);
+    } catch (err) {
+      console.error('Failed to publish event:', err);
+      alert('Failed to publish event');
+    }
+  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -168,11 +179,18 @@ export const CreatorDashboard: React.FC = () => {
                       </div>
                       <div className="flex items-center space-x-2">
                         <StatusBadge status={event.status} />
-                        <Button variant="outline" size="sm">
+                        {event.status === 'draft' && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handlePublish(event.id || event._id)}
+                            disabled={publishMutation.isPending}
+                          >
+                            Publish
+                          </Button>
+                        )}
+                        <Button variant="outline" size="sm" onClick={() => navigate('/creator/events')}>
                           <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <Edit className="w-4 h-4" />
                         </Button>
                       </div>
                     </div>

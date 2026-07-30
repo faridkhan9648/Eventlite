@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui';
 import { Button } from '../../components/ui';
 import { Badge } from '../../components/ui';
@@ -11,20 +12,44 @@ import {
   Clock, 
   Edit,
   Trash2,
-  Plus
+  Plus,
+  Send
 } from 'lucide-react';
-import { useCreatorEvents } from '../../hooks/useCreator';
+import { useEventCreatorEvents, usePublishEvent, useDeleteEvent } from '../../hooks/useEventCreator';
 import { RoleProtectedRoute } from '../../components/RoleProtectedRoute';
 import { UserRole } from '../../types/rbac';
 
 export const EventsList: React.FC = () => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
-  const { data: events, isLoading, error } = useCreatorEvents();
+  const { data: events, isLoading, error } = useEventCreatorEvents();
+  const publishMutation = usePublishEvent();
+  const deleteMutation = useDeleteEvent();
 
   const filteredEvents = events?.filter((event: any) =>
-    event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.description.toLowerCase().includes(searchTerm.toLowerCase())
+    event.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    event.description?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
+
+  const handlePublish = async (id: string) => {
+    try {
+      await publishMutation.mutateAsync(id);
+    } catch (err) {
+      console.error('Failed to publish event:', err);
+      alert('Failed to publish event');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm('Are you sure you want to delete this event?')) {
+      try {
+        await deleteMutation.mutateAsync(id);
+      } catch (err) {
+        console.error('Failed to delete event:', err);
+        alert('Failed to delete event');
+      }
+    }
+  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -80,7 +105,7 @@ export const EventsList: React.FC = () => {
         <div className="space-y-6">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold text-gray-900">My Events</h1>
-            <Button>
+            <Button onClick={() => navigate('/creator/create')}>
               <Plus className="h-4 w-4 mr-2" />
               Create Event
             </Button>
@@ -100,7 +125,7 @@ export const EventsList: React.FC = () => {
               {filteredEvents.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredEvents.map((event: any) => (
-                    <Card key={event.id} className="hover:shadow-lg transition-shadow">
+                    <Card key={event.id || event._id} className="hover:shadow-lg transition-shadow">
                       <CardContent className="p-6">
                         <div className="flex justify-between items-start mb-4">
                           <CardHeader>
@@ -131,10 +156,23 @@ export const EventsList: React.FC = () => {
                         </div>
                         
                         <div className="flex justify-end space-x-2 pt-4">
-                          <Button variant="outline" size="sm">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm">
+                          {event.status === 'draft' && (
+                            <Button 
+                              variant="default" 
+                              size="sm"
+                              onClick={() => handlePublish(event.id || event._id)}
+                              disabled={publishMutation.isPending}
+                            >
+                              <Send className="h-4 w-4 mr-1" />
+                              Publish
+                            </Button>
+                          )}
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleDelete(event.id || event._id)}
+                            disabled={deleteMutation.isPending}
+                          >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
